@@ -1,42 +1,66 @@
-// Copyright © 2016 Alan A. A. Donovan & Brian W. Kernighan.
-// License: https://creativecommons.org/licenses/by-nc-sa/4.0/
+package main
 
-// See page 156.
+import (
+	"fmt"
+	"math"
+	"math/rand"
+	"time"
+)
 
-// Package geometry defines simple types for plane geometry.
-//!+point
-package geometry
-
-import "math"
-
-type Point struct{ X, Y float64 }
-
-// traditional function
-func Distance(p, q Point) float64 {
-	return math.Hypot(q.X-p.X, q.Y-p.Y)
+type Point struct {
+	x, y float64
 }
 
-// same thing, but as a method of the Point type
+func (p Point) X() float64 {
+	return p.x
+}
+
+func (p Point) Y() float64 {
+	return p.y
+}
+
 func (p Point) Distance(q Point) float64 {
-	return math.Hypot(q.X-p.X, q.Y-p.Y)
+	return math.Hypot(q.X()-p.X(), q.Y()-p.Y())
 }
 
-//!-point
-
-//!+path
-
-// A Path is a journey connecting the points with straight lines.
 type Path []Point
 
-// Distance returns the distance traveled along the path.
 func (path Path) Distance() float64 {
 	sum := 0.0
+	a := len(path)
 	for i := range path {
 		if i > 0 {
 			sum += path[i-1].Distance(path[i])
+			if i == a-1 {
+				fmt.Printf("%v ", path[i-1].Distance(path[i]))
+			} else {
+				fmt.Printf("%v + ", path[i-1].Distance(path[i]))
+			}
 		}
 	}
 	return sum
 }
 
-//!-path
+func main() {
+	var sides int
+	fmt.Scan(&sides)
+	var max int = 100
+	var min int = -100
+	var operation = max - min
+	var path Path
+
+	rand.Seed(time.Now().UnixNano())
+	for i := 0; i < sides; i++ {
+		var point = Point{float64(rand.Intn(operation) + min), float64(rand.Intn(operation) + min)}
+		path = append(path, point)
+	}
+
+	fmt.Printf("Generating a [%v] sides figure\n", sides)
+	fmt.Println("Figure's vertices")
+	for i := 0; i < sides; i++ {
+		fmt.Printf("( %v, %v)\n", path[i].X(), path[i].Y())
+	}
+	fmt.Println("Figure's Perimeter")
+	fmt.Printf("= %v \n", path.Distance())
+}
+
