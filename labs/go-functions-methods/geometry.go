@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"math"
 	"math/rand"
+	"os"
+	"strconv"
 	"time"
 )
 
@@ -43,7 +45,7 @@ func (path Path) Distance() float64 {
 
 func main() {
 	var sides int
-	fmt.Scan(&sides)
+	sides, _ = strconv.Atoi(os.Args[1])
 	var max int = 100
 	var min int = -100
 	var operation = max - min
@@ -61,7 +63,6 @@ func main() {
 		fmt.Printf("( %v, %v)\n", path[i].X(), path[i].Y())
 	}
 	fmt.Println("Figure's Perimeter")
-	fmt.Printf("= %v \n", path.Distance())
+	fmt.Printf("= %v", path.Distance())
 }
-
 
