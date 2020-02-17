@@ -36,16 +36,14 @@ func main() {
 				fileName := line[i+1]
 				fl := m[fileName]
 				fl.pckgName = fileName
-				if fl.removalDate == "" || fl.lastUpdtDate == "" {
-					fl.removalDate = "-"
-					fl.lastUpdtDate = "-"
-				}
 				if s == "installed" {
 					instllCntr = instllCntr + 1
 					fl.nUpdt = 0
 					fl.installDate = line[i-3] + " " + line[i-2]
 					fl.installDate = strings.Trim(fl.installDate, "[")
 					fl.installDate = strings.Trim(fl.installDate, "]")
+					fl.removalDate = "-"
+					fl.lastUpdtDate = "-"
 				}
 				if s == "upgraded" {
 					upgCntr = upgCntr + 1
