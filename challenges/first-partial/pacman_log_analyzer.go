@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strconv"
 	"strings"
 )
 
@@ -36,7 +37,7 @@ func main() {
 				fileName := line[i+1]
 				fl := m[fileName]
 				fl.pckgName = fileName
-				if s == "installed" {
+				if line[i-1] == "[ALPM]" && s == "installed" {
 					instllCntr = instllCntr + 1
 					fl.nUpdt = 0
 					fl.installDate = line[i-3] + " " + line[i-2]
@@ -63,21 +64,43 @@ func main() {
 		}
 	}
 
-	fmt.Println("Pacman Packages Report")
-	fmt.Println("----------------------")
-	fmt.Printf("- Installed files: %v\n", instllCntr)
-	fmt.Printf("- Removed files: %v\n", rmvCntr)
-	fmt.Printf("- Upgraded files: %v\n", upgCntr)
-	fmt.Printf("- Current installed: %v\n", instllCntr-rmvCntr)
+	f, err := os.Create("packages_report.txt")
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
 
+	l, err := f.WriteString("Pacman Packages Report\n")
+	l, err = f.WriteString("----------------------\n")
+	s := strconv.FormatInt(int64(instllCntr), 10)
+	l, err = f.WriteString("- Installed files: " + s + "\n")
+	s = strconv.FormatInt(int64(rmvCntr), 10)
+	l, err = f.WriteString("- Removed files: " + s + "\n")
+	s = strconv.FormatInt(int64(upgCntr), 10)
+	l, err = f.WriteString("- Upgraded files: " + s + "\n")
+	s = strconv.FormatInt(int64(instllCntr-rmvCntr), 10)
+	l, err = f.WriteString("- Current installed: " + s + "\n")
+	l, err = f.WriteString("\nList of packages\n")
+	l, err = f.WriteString("----------------\n")
 	for key, value := range m {
-		fmt.Println("List of packages")
-		fmt.Println("----------------")
-		fmt.Printf("- Package Name        : %v\n", key)
-		fmt.Printf("  - Install date      : %v\n", value.installDate)
-		fmt.Printf("  - Last update date  : %v\n", value.lastUpdtDate)
-		fmt.Printf("  - How many updates  : %v\n", value.nUpdt)
-		fmt.Printf("  - Removal date      : %v\n", value.removalDate)
+		l, err = f.WriteString("- Package Name        : " + key + "\n")
+		l, err = f.WriteString("  - Install date      : " + value.installDate + "\n")
+		l, err = f.WriteString("  - Last update date  : " + value.lastUpdtDate + "\n")
+		l, err = f.WriteString("  - How many updates  : " + strconv.FormatInt(int64(value.nUpdt), 10) + "\n")
+		l, err = f.WriteString("  - Removal date      : " + value.removalDate + "\n")
+
+	}
+
+	if err != nil {
+		fmt.Println(err)
+		f.Close()
+		return
+	}
+	fmt.Println(l, "bytes written successfully")
+	err = f.Close()
+	if err != nil {
+		fmt.Println(err)
+		return
 	}
 }
 
