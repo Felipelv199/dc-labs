@@ -13,6 +13,8 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strconv"
+	"strings"
 
 	"gopl.io/ch5/links"
 )
@@ -22,14 +24,18 @@ import (
 // enforce a limit of 20 concurrent requests.
 var tokens = make(chan struct{}, 20)
 
-func crawl(url string) []string {
-	fmt.Println(url)
-	tokens <- struct{}{} // acquire a token
-	list, err := links.Extract(url)
-	<-tokens // release the token
+func crawl(url string, depth int, actualDep int) []string {
+	var list []string
+	if actualDep <= depth {
+		fmt.Println(url)
+		tokens <- struct{}{} // acquire a token
+		list, err := links.Extract(url)
+		<-tokens // release the token
 
-	if err != nil {
-		log.Print(err)
+		if err != nil {
+			log.Print(err)
+		}
+		return list
 	}
 	return list
 }
@@ -43,22 +49,32 @@ func main() {
 
 	// Start with the command-line arguments.
 	n++
-	go func() { worklist <- os.Args[1:] }()
+	args := os.Args[1:]
+	s := strings.Split(args[0], "=")
+	var start []string
+	start = os.Args[2:]
+	depth, _ := strconv.Atoi(s[1])
+	go func() { worklist <- start }()
 
 	// Crawl the web concurrently.
 	seen := make(map[string]bool)
+	urlDep := make(map[string]int)
+	actualDep := 0
 	for ; n > 0; n-- {
 		list := <-worklist
 		for _, link := range list {
 			if !seen[link] {
+				aux := actualDep
+				aux = aux + 1
 				seen[link] = true
 				n++
+				urlDep[link] = aux
 				go func(link string) {
-					worklist <- crawl(link)
+					worklist <- crawl(link, depth, aux)
 				}(link)
 			}
 		}
+		actualDep = actualDep + 1
 	}
 }
 
-//!-
