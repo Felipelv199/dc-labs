@@ -42,7 +42,7 @@ var (
 	nodeName          = ""
 )
 
-func deleteUser(name string) {
+func deleteWorker(name string) {
 	db, er := bolt.Open("my.db", 0600, nil)
 	if er != nil {
 		log.Fatal(er)
@@ -57,7 +57,7 @@ func deleteUser(name string) {
 	})
 }
 
-func createUser(name string) {
+func createWorker(name string) {
 	db, er := bolt.Open("my.db", 0600, nil)
 	if er != nil {
 		log.Fatal(er)
@@ -102,7 +102,7 @@ func setWorkerUsage(name string) {
 	})
 }
 
-func userExist(name string) bool {
+func workerExist(name string) bool {
 	db, er := bolt.Open("my.db", 0600, nil)
 	if er != nil {
 		log.Fatal(er)
@@ -124,7 +124,7 @@ func SetupCloseHandler(name string) {
 	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
 	go func() {
 		<-c
-		deleteUser(name)
+		deleteWorker(name)
 		os.Exit(0)
 	}()
 }
@@ -195,15 +195,14 @@ func getAvailablePort() int {
 func main() {
 	flag.Parse()
 	SetupCloseHandler(nodeName)
-
-	if userExist(nodeName) != true {
-		createUser(nodeName)
+	if workerExist(nodeName) != true {
+		createWorker(nodeName)
 		setWorkerTags(nodeName, tags)
 		setWorkerUsage(nodeName)
 	} else {
 		fmt.Println("User already exit")
+		return
 	}
-
 	// Subscribe to Controller
 	go joinCluster(nodeName)
 

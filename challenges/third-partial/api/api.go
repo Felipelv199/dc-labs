@@ -17,7 +17,7 @@ import (
 
 var activeUsers = make(map[string]string)
 
-func userStatus(name string) string {
+func workerStatus(name string) string {
 	status := ""
 	db, er := bolt.Open("my.db", 0600, nil)
 	if er != nil {
@@ -35,7 +35,7 @@ func userStatus(name string) string {
 	return status
 }
 
-func userTags(name string) string {
+func getWorkerTags(name string) string {
 	status := ""
 	db, er := bolt.Open("my.db", 0600, nil)
 	if er != nil {
@@ -53,7 +53,7 @@ func userTags(name string) string {
 	return status
 }
 
-func userExist(name string) bool {
+func workerExist(name string) bool {
 	db, er := bolt.Open("my.db", 0600, nil)
 	if er != nil {
 		log.Fatal(er)
@@ -170,8 +170,8 @@ func Status(c *gin.Context) {
 
 				c.JSON(http.StatusOK, gin.H{
 					"Worker": worker,
-					"Status": userStatus(worker),
-					"Tags":   userTags(worker),
+					"Status": workerStatus(worker),
+					"Tags":   getWorkerTags(worker),
 					"Usage":  strconv.Itoa(getWorkerUsage(worker)) + "%",
 				})
 			}
@@ -188,11 +188,11 @@ func StatusParam(c *gin.Context) {
 	for key, _ := range activeUsers {
 		if token == key {
 			worker := c.Param("worker")
-			if userExist(worker) == true {
+			if workerExist(worker) == true {
 				c.JSON(http.StatusOK, gin.H{
 					"Worker": worker,
-					"Status": userStatus(worker),
-					"Tags":   userTags(worker),
+					"Status": workerStatus(worker),
+					"Tags":   getWorkerTags(worker),
 					"Usage":  strconv.Itoa(getWorkerUsage(worker)) + "%",
 				})
 			} else {
