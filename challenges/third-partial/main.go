@@ -3,8 +3,6 @@ package main
 import (
 	"fmt"
 	"log"
-	"math/rand"
-	"time"
 
 	"github.com/CodersSquad/dc-labs/challenges/third-partial/api"
 	"github.com/CodersSquad/dc-labs/challenges/third-partial/controller"
@@ -44,20 +42,37 @@ func getWorkers() []string {
 	})
 	return workers
 }
+
+func createJob() {
+	db, er := bolt.Open("my.db", 0600, nil)
+	if er != nil {
+		log.Fatal(er)
+	}
+	defer db.Close()
+	db.Update(func(tx *bolt.Tx) error {
+		if tx.Bucket([]byte("Job")) == nil {
+			_, err := tx.CreateBucketIfNotExists([]byte("Job"))
+			return err
+		}
+		return nil
+	})
+}
+
 func main() {
+	createJob()
+	jobs := make(chan string)
+	jobsName := make(chan string)
 	log.Println("Welcome to the Distributed and Parallel Image Processing System")
 	// Start Controller
 	go controller.Start()
 	// Start Scheduler
-	jobs := make(chan scheduler.Job)
-	go scheduler.Start(jobs)
-	// Send sample jobs
-	sampleJob := scheduler.Job{Address: "localhost:50051", RPCName: "hello"}
 
-	sampleJob.RPCName = fmt.Sprintf("hello-%v", rand.Intn(10000))
-	jobs <- sampleJob
-	time.Sleep(time.Second * 5)
+	go scheduler.Start(jobs)
 	//Start Api
-	api.Start()
+	go api.Start(jobsName)
+	for {
+		name := <-jobsName
+		jobs <- name
+	}
 }
 

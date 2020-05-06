@@ -5,7 +5,6 @@ import (
 	"flag"
 	"fmt"
 	"log"
-	"math/rand"
 	"net"
 	"os"
 	"os/signal"
@@ -39,8 +38,14 @@ var (
 	controllerAddress = ""
 	workerName        = ""
 	tags              = ""
-	nodeName          = ""
+	rpcPort           = 0
 )
+
+func init() {
+	flag.StringVar(&controllerAddress, "controller", "tcp://localhost:40899", "Controller address")
+	flag.StringVar(&workerName, "node-name", "hard-worker", "Worker Name")
+	flag.StringVar(&tags, "tags", "gpu,superCPU,largeMemory", "Comma-separated worker tags")
+}
 
 func deleteWorker(name string) {
 	db, er := bolt.Open("my.db", 0600, nil)
@@ -54,51 +59,6 @@ func deleteWorker(name string) {
 			return fmt.Errorf("delete bucket: %s", err)
 		}
 		return nil
-	})
-}
-
-func createWorker(name string) {
-	db, er := bolt.Open("my.db", 0600, nil)
-	if er != nil {
-		log.Fatal(er)
-	}
-	defer db.Close()
-	db.Update(func(tx *bolt.Tx) error {
-		if tx.Bucket([]byte(name)) == nil {
-			b, _ := tx.CreateBucketIfNotExists([]byte(name))
-			err := b.Put([]byte("status"), []byte("running"))
-			return err
-		}
-		return nil
-	})
-}
-
-func setWorkerTags(name string, tags string) {
-	db, er := bolt.Open("my.db", 0600, nil)
-	if er != nil {
-		log.Fatal(er)
-	}
-	defer db.Close()
-	db.Update(func(tx *bolt.Tx) error {
-		b := tx.Bucket([]byte(name))
-		err := b.Put([]byte("tags"), []byte(tags))
-		return err
-	})
-}
-
-func setWorkerUsage(name string) {
-	db, er := bolt.Open("my.db", 0600, nil)
-	if er != nil {
-		log.Fatal(er)
-	}
-	defer db.Close()
-	db.Update(func(tx *bolt.Tx) error {
-		b := tx.Bucket([]byte(name))
-		s := rand.NewSource(time.Now().UnixNano())
-		r := rand.New(s)
-		usage := r.Intn(100)
-		err := b.Put([]byte("usage"), []byte(strconv.Itoa(usage)))
-		return err
 	})
 }
 
@@ -135,13 +95,6 @@ func (s *server) SayHello(ctx context.Context, in *pb.HelloRequest) (*pb.HelloRe
 	return &pb.HelloReply{Message: "Hello " + in.GetName()}, nil
 }
 
-func init() {
-	flag.StringVar(&controllerAddress, "controller", "tcp://localhost:40899", "Controller address")
-	flag.StringVar(&nodeName, "node-name", "worker0", "Worker Name")
-	flag.StringVar(&workerName, "worker-name", "hard-worker", "Worker Name")
-	flag.StringVar(&tags, "tags", "gpu,superCPU,largeMemory", "Comma-separated worker tags")
-}
-
 func die(format string, v ...interface{}) {
 	fmt.Fprintln(os.Stderr, fmt.Sprintf(format, v...))
 	os.Exit(1)
@@ -152,7 +105,7 @@ func date() string {
 }
 
 // joinCluster is meant to join the controller message-passing server
-func joinCluster(name string) {
+func joinCluster() {
 	var sock mangos.Socket
 	var err error
 	var msg []byte
@@ -168,10 +121,17 @@ func joinCluster(name string) {
 		if msg, err = sock.Recv(); err != nil {
 			die("Cannot recv: %s", err.Error())
 		}
-		fmt.Printf("CLIENT(%s): RECEIVED \"%s\" SURVEY REQUEST\n", name, string(msg))
+		fmt.Printf("CLIENT(%s): RECEIVED \"%s\" SURVEY REQUEST\n", workerName, string(msg))
 
-		message := name + "|" + "|" + date()
-		fmt.Printf("CLIENT(%s): SENDING DATE SURVEY RESPONSE\n", name)
+		message := ""
+		if workerExist(workerName) {
+			fmt.Printf("CLIENT(%s): SENDING DATE SURVEY RESPONSE\n", workerName)
+			message = message + workerName + "|" + date()
+		} else {
+			fmt.Printf("CLIENT(%s): SENDING WORKER DATA\n", workerName)
+			port := strconv.Itoa(rpcPort)
+			message = message + workerName + "|" + "running" + "|" + tags + "|" + port
+		}
 		if err = sock.Send([]byte(message)); err != nil {
 			die("Cannot send: %s", err.Error())
 		}
@@ -194,20 +154,17 @@ func getAvailablePort() int {
 
 func main() {
 	flag.Parse()
-	SetupCloseHandler(nodeName)
-	if workerExist(nodeName) != true {
-		createWorker(nodeName)
-		setWorkerTags(nodeName, tags)
-		setWorkerUsage(nodeName)
-	} else {
+	SetupCloseHandler(workerName)
+	if workerExist(workerName) {
 		fmt.Println("User already exit")
 		return
 	}
+
+	rpcPort = getAvailablePort()
 	// Subscribe to Controller
-	go joinCluster(nodeName)
+	go joinCluster()
 
 	// Setup Worker RPC Server
-	rpcPort := getAvailablePort()
 	log.Printf("Starting RPC Service on localhost:%v", rpcPort)
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%v", rpcPort))
 	if err != nil {

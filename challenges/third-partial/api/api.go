@@ -1,7 +1,6 @@
 package api
 
 import (
-	"fmt"
 	"io"
 	"log"
 	"net/http"
@@ -16,27 +15,31 @@ import (
 )
 
 var activeUsers = make(map[string]string)
+var jobName = make(chan string)
 
-func workerStatus(name string) string {
-	status := ""
+func getJobWorker(task string) string {
+	value := ""
 	db, er := bolt.Open("my.db", 0600, nil)
 	if er != nil {
 		log.Fatal(er)
 	}
 	defer db.Close()
 	db.View(func(tx *bolt.Tx) error {
-		b := tx.Bucket([]byte(name))
+		b := tx.Bucket([]byte("Job"))
 		if b != nil {
-			v := b.Get([]byte("status"))
-			status = string(v)
+			for {
+				v := b.Get([]byte(task))
+				value = string(v)
+				break
+			}
 		}
 		return nil
 	})
-	return status
+	return value
 }
 
-func getWorkerTags(name string) string {
-	status := ""
+func getWorkerValue(name string, key string) string {
+	value := ""
 	db, er := bolt.Open("my.db", 0600, nil)
 	if er != nil {
 		log.Fatal(er)
@@ -45,12 +48,12 @@ func getWorkerTags(name string) string {
 	db.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte(name))
 		if b != nil {
-			v := b.Get([]byte("tags"))
-			status = string(v)
+			v := b.Get([]byte(key))
+			value = string(v)
 		}
 		return nil
 	})
-	return status
+	return value
 }
 
 func workerExist(name string) bool {
@@ -81,30 +84,13 @@ func getWorkers() []string {
 		// Assume bucket exists and has keys
 		c := tx.Cursor()
 		for k, _ := c.First(); k != nil; k, _ = c.Next() {
-			workers = append(workers, string(k))
+			if string(k) != "Job" {
+				workers = append(workers, string(k))
+			}
 		}
 		return nil
 	})
 	return workers
-}
-
-func getWorkerUsage(name string) int {
-	db, er := bolt.Open("my.db", 0600, nil)
-	if er != nil {
-		log.Fatal(er)
-	}
-	defer db.Close()
-	usage := 0
-	db.View(func(tx *bolt.Tx) error {
-		b := tx.Bucket([]byte(name))
-		if b != nil {
-			v := b.Get([]byte("usage"))
-			i, _ := strconv.Atoi(string(v))
-			usage = i
-		}
-		return nil
-	})
-	return usage
 }
 
 func loginVerification(user string) bool {
@@ -170,9 +156,9 @@ func Status(c *gin.Context) {
 
 				c.JSON(http.StatusOK, gin.H{
 					"Worker": worker,
-					"Status": workerStatus(worker),
-					"Tags":   getWorkerTags(worker),
-					"Usage":  strconv.Itoa(getWorkerUsage(worker)) + "%",
+					"Status": getWorkerValue(worker, "status"),
+					"Tags":   getWorkerValue(worker, "tags"),
+					"Usage":  getWorkerValue(worker, "usage") + "%",
 				})
 			}
 			return
@@ -191,9 +177,9 @@ func StatusParam(c *gin.Context) {
 			if workerExist(worker) == true {
 				c.JSON(http.StatusOK, gin.H{
 					"Worker": worker,
-					"Status": workerStatus(worker),
-					"Tags":   getWorkerTags(worker),
-					"Usage":  strconv.Itoa(getWorkerUsage(worker)) + "%",
+					"Status": getWorkerValue(worker, "status"),
+					"Tags":   getWorkerValue(worker, "tags"),
+					"Usage":  getWorkerValue(worker, "usage") + "%",
 				})
 			} else {
 				c.JSON(http.StatusOK, gin.H{
@@ -248,18 +234,13 @@ func WorkloadsTest(c *gin.Context) {
 	token := strings.Trim(strings.TrimLeft(c.GetHeader("authorization"), "Bearer"), " ")
 	for key, _ := range activeUsers {
 		if token == key {
+			name := c.Param("test")
 			workers := getWorkers()
 			if len(workers) > 0 {
-				worker := workers[0]
-				for _, v := range workers {
-					if worker != v {
-						if getWorkerUsage(worker) > getWorkerUsage(v) {
-							worker = v
-						}
-					}
-				}
+				jobName <- name
+				worker := getJobWorker(name)
 				c.JSON(http.StatusOK, gin.H{
-					"Workload": "test",
+					"Workload": name,
 					"Job ID":   "1",
 					"Status":   "Scheduling",
 					"Result":   "Done in Worker: " + worker,
@@ -277,9 +258,9 @@ func WorkloadsTest(c *gin.Context) {
 	})
 }
 
-func Start() {
-	fmt.Println("Entre")
+func Start(jobs chan string) {
 	r := gin.Default()
+	jobName = jobs
 	authorized := r.Group("/", gin.BasicAuth(gin.Accounts{
 		"user1": "pass1",
 		"user2": "pass2",
@@ -290,7 +271,7 @@ func Start() {
 	r.GET("/logout", Logout)
 	r.GET("/status", Status)
 	r.GET("/status/:worker", StatusParam)
-	r.GET("/workloads/test", WorkloadsTest)
+	r.GET("/workloads/:test", WorkloadsTest)
 	r.POST("/upload", Upload)
 
 	r.Run() // listen and serve on 0.0.0.0:8080
